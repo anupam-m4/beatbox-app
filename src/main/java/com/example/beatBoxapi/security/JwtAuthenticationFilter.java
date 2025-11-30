@@ -152,6 +152,87 @@
 //    }
 //}
 
+//
+//package com.example.beatBoxapi.security;
+//
+//import com.example.beatBoxapi.service.AppUserDetailsService;
+//import com.example.beatBoxapi.util.JwtUtil;
+//import jakarta.servlet.FilterChain;
+//import jakarta.servlet.ServletException;
+//import jakarta.servlet.http.HttpServletRequest;
+//import jakarta.servlet.http.HttpServletResponse;
+//import lombok.RequiredArgsConstructor;
+//import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+//import org.springframework.security.core.context.SecurityContextHolder;
+//import org.springframework.security.core.userdetails.UserDetails;
+//import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+//import org.springframework.stereotype.Component;
+//import org.springframework.web.filter.OncePerRequestFilter;
+//
+//import java.io.IOException;
+//
+//@Component
+//@RequiredArgsConstructor
+//public class JwtAuthenticationFilter extends OncePerRequestFilter {
+//
+//    private final JwtUtil jwtUtil;
+//    private final AppUserDetailsService userDetailsService;
+//
+//    @Override
+//    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+//
+//        final String authHeader = request.getHeader("Authorization");
+//        final String jwt;
+//        final String userEmail;
+//
+//        System.out.println("\n--- JWT Filter Processing URI: " + request.getRequestURI() + " ---");
+//
+//        // 1. Token presence and format check
+//        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+//            System.out.println("JWT Filter: No Bearer token found. Continuing filter chain.");
+//            filterChain.doFilter(request, response);
+//            return;
+//        }
+//
+//        jwt = authHeader.substring(7);
+//
+//        // **FIX 1: Using extractEmail()**
+//        userEmail = jwtUtil.extractEmail(jwt);
+//
+//        // 2. Security context population if token is valid
+//        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+//
+//            // Load user details
+//            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+//
+//            // **FIX 2: Using validateToken()**
+//            if (jwtUtil.validateToken(jwt, userDetails)) {
+//
+//                // --- CRITICAL DEBUGGING LOG ---
+//                System.out.println("JWT VALIDATED SUCCESSFULLY for user: " + userEmail);
+//                System.out.println("Authorities loaded into Context: " + userDetails.getAuthorities());
+//                // -----------------------------
+//
+//                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+//                        userDetails,
+//                        null,
+//                        userDetails.getAuthorities()
+//                );
+//                authToken.setDetails(
+//                        new WebAuthenticationDetailsSource().buildDetails(request)
+//                );
+//                SecurityContextHolder.getContext().setAuthentication(authToken);
+//
+//            } else {
+//                System.out.println("JWT Validation FAILED: Token expired or invalid signature.");
+//            }
+//        }
+//
+//        // 3. Continue the filter chain
+//        filterChain.doFilter(request, response);
+//        System.out.println("--- JWT Filter finished for URI: " + request.getRequestURI() + " ---");
+//    }
+//}
 
 package com.example.beatBoxapi.security;
 
@@ -163,6 +244,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -170,6 +252,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -179,7 +262,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AppUserDetailsService userDetailsService;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
@@ -196,43 +280,55 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         jwt = authHeader.substring(7);
 
-        // **FIX 1: Using extractEmail()**
-        userEmail = jwtUtil.extractEmail(jwt);
+        try {
+            // Extract email from JWT
+            userEmail = jwtUtil.extractEmail(jwt);
 
-        // 2. Security context population if token is valid
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            // Load user details
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+                // Load user details from DB
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
-            // **FIX 2: Using validateToken()**
-            if (jwtUtil.validateToken(jwt, userDetails)) {
+                // Validate token
+                if (jwtUtil.validateToken(jwt, userDetails)) {
 
-                // --- CRITICAL DEBUGGING LOG ---
-                System.out.println("JWT VALIDATED SUCCESSFULLY for user: " + userEmail);
-                System.out.println("Authorities loaded into Context: " + userDetails.getAuthorities());
-                // -----------------------------
+                    System.out.println("JWT VALIDATED SUCCESSFULLY for user: " + userEmail);
 
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    // Add ROLE_ prefix if missing
+                    var authorities = userDetails.getAuthorities().stream()
+                            .map(a -> new SimpleGrantedAuthority(
+                                    a.getAuthority().startsWith("ROLE_") ? a.getAuthority() : "ROLE_" + a.getAuthority()
+                            ))
+                            .collect(Collectors.toList());
 
-            } else {
-                System.out.println("JWT Validation FAILED: Token expired or invalid signature.");
+                    System.out.println("Authorities loaded into Context: " + authorities);
+
+                    // Set authentication in context
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            authorities
+                    );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                } else {
+                    System.out.println("JWT Validation FAILED: Token expired or invalid signature.");
+                }
             }
+
+        } catch (Exception e) {
+            System.out.println("JWT Exception: " + e.getMessage());
         }
 
-        // 3. Continue the filter chain
+        // Continue the filter chain
         filterChain.doFilter(request, response);
         System.out.println("--- JWT Filter finished for URI: " + request.getRequestURI() + " ---");
     }
 }
+
+
+
 
 
 
