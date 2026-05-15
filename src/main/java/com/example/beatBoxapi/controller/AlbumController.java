@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-@CrossOrigin(origins = {"http://localhost:5173", "https://beatbox-user.netlify.app"}) 
+@CrossOrigin(origins = {"http://localhost:5173", "https://beatbox-user.netlify.app","https://beatbox-admin.netlify.app"}) 
 @RestController
 @RequestMapping("/api/albums")
 @RequiredArgsConstructor
