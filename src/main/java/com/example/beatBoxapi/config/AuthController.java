@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-@CrossOrigin(origins = "http://localhost:5173") // Vite's default port
+@CrossOrigin(origins = {"http://localhost:5173", "https://beatbox-user.netlify.app"})
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
