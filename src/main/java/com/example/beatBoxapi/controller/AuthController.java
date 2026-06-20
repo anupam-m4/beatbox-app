@@ -1,4 +1,4 @@
-package com.example.beatBoxapi.config;
+package com.example.beatBoxapi.controller;
 
 import com.example.beatBoxapi.document.User;
 import com.example.beatBoxapi.dto.AuthRequest;
